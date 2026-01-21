@@ -12,6 +12,9 @@ app.use(logger);
 app.use(cors());
 app.use(express.json());
 
+const router = require("./routes");
+app.use("/api",router);
+
 app.get("/", (req, res) => {
   res.send("Works!");
 });
@@ -19,6 +22,3 @@ app.get("/", (req, res) => {
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 })
-
-
-

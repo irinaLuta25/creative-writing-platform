@@ -14,8 +14,9 @@ async function comparePassword(password, hashedPassword) {
 
 function generateToken(user) {
     const userData = {
-        userId: user.id,
-        email: user.email
+        userId: user.userId,
+        email: user.email,
+        roles: user.roles
     };
 
     return jwt.sign(userData, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN });

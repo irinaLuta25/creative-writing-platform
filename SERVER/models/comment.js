@@ -1,4 +1,6 @@
-const db = require("../config/db");
+const {db} = require("../config/db");
+const admin = require("firebase-admin");
+const { FieldValue } = admin.firestore;
 
 function commentsSubcollection(pieceId) {
   return db.collection("pieces").doc(pieceId).collection("comments");
@@ -6,13 +8,8 @@ function commentsSubcollection(pieceId) {
 
 const findById = async (pieceId, commentId) => {
   const doc = await commentsSubcollection(pieceId).doc(commentId).get();
-  if (!doc.exists) {
-    return null;
-  }
-  return {
-    id: doc.id,
-    ...doc.data(),
-  };
+  if (!doc.exists) return null;
+  return { id: doc.id, ...doc.data() };
 };
 
 const findAllForPiece = async (pieceId, limit = 50) => {
@@ -26,17 +23,33 @@ const findAllForPiece = async (pieceId, limit = 50) => {
 
 const create = async (pieceId, commentData) => {
   const docRef = commentsSubcollection(pieceId).doc();
-  await docRef.set({ commentId: docRef.id, ...commentData });
+  const commentId = docRef.id;
+
+  await docRef.set({
+    commentId,
+    ...commentData,
+    metadata: {
+      ...(commentData.metadata || {}),
+      createdAt: commentData?.metadata?.createdAt || FieldValue.serverTimestamp(),
+      updatedAt: commentData?.metadata?.updatedAt || FieldValue.serverTimestamp(),
+    },
+  });
+
   const snap = await docRef.get();
-  return {
-    id: snap.id,
-    ...snap.data(),
-  };
+  return { id: snap.id, ...snap.data() };
 };
 
 const update = async (pieceId, commentId, updateData) => {
   const docRef = commentsSubcollection(pieceId).doc(commentId);
-  await docRef.set(updateData, { merge: true });
+
+  await docRef.set(
+    {
+      ...updateData,
+      metadata: { ...(updateData.metadata || {}), updatedAt: FieldValue.serverTimestamp() },
+    },
+    { merge: true }
+  );
+
   const snap = await docRef.get();
   return snap.exists ? { id: snap.id, ...snap.data() } : null;
 };

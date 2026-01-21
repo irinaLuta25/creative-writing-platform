@@ -1,4 +1,4 @@
-const db = require("../config/db");
+const {db} = require("../config/db");
 
 const challengesCollection = db.collection('challenges');
 
@@ -30,9 +30,15 @@ const findAll = async () => {
 }
 
 const create = async (challengeData) => {
-    const docRef = await challengesCollection.add(challengeData);
-    return docRef;
-}
+  const docRef = await challengesCollection.add(challengeData);
+  const snap = await docRef.get();
+
+  return {
+    id: snap.id,
+    ...snap.data()
+  };
+};
+
 
 const update = async (id, updateData) => {
     const docRef = await challengesCollection.doc(id);
