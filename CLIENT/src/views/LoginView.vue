@@ -13,7 +13,7 @@
 
         <v-btn
           class="mt-4"
-          color="primary"
+          color="deep-purple-accent-4"
           type="submit"
           :loading="auth.loading"
           block
