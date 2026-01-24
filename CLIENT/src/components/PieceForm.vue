@@ -37,13 +37,16 @@
 
     <v-combobox
       v-model="form.tags"
+      :items="tagOptions"
       label="Tags (1–5)"
       multiple
       chips
       clearable
+      closable-chips
       :error-messages="errors.tags"
-      hint="Press Enter after each tag"
+      hint="Pick existing tags or type new ones. Press Enter to add."
       persistent-hint
+      @update:modelValue="onTagsChanged"
       required
     />
 
@@ -52,7 +55,7 @@
     </v-alert>
 
     <div class="d-flex gap-2 mt-5">
-      <v-btn color="primary" type="submit" :loading="loading">
+      <v-btn color="deep-purple-accent-4" type="submit" :loading="loading">
         {{ submitText }}
       </v-btn>
       <v-btn variant="outlined" :disabled="loading" @click="$emit('cancel')">
@@ -64,13 +67,13 @@
 
 <script setup>
 import { computed, reactive, watch } from "vue";
+import { useTagsStore } from "../stores/tags";
 
 const props = defineProps({
   modelValue: { type: Object, default: null },
   loading: { type: Boolean, default: false },
   serverError: { type: String, default: "" },
   submitText: { type: String, default: "Save" },
-
   genres: {
     type: Array,
     default: () => ([
@@ -86,6 +89,11 @@ const props = defineProps({
 
 const emit = defineEmits(["submit", "cancel"]);
 
+const tagsStore = useTagsStore();
+tagsStore.hydrate();
+
+const tagOptions = computed(() => tagsStore.tags);
+
 const form = reactive({
   title: "",
   body: "",
@@ -94,19 +102,51 @@ const form = reactive({
   tags: [],
 });
 
+const errors = reactive({
+  title: [],
+  body: [],
+  language: [],
+  genre: [],
+  tags: [],
+});
+
+function normalizeTag(t) {
+  return String(t || "")
+    .trim()
+    .replace(/^#+/, "")
+    .toLowerCase();
+}
+
+function uniqueTags(arr) {
+  return Array.from(new Set((arr || []).map(normalizeTag).filter(Boolean)));
+}
+
+function onTagsChanged(val) {
+  const cleaned = uniqueTags(val);
+  form.tags = cleaned;
+  tagsStore.addTags(cleaned);
+}
+
 watch(
   () => props.modelValue,
   (piece) => {
     if (!piece) return;
+
     form.title = piece.title || "";
     form.body = piece.content?.body || "";
     form.language = piece.content?.language || "ro";
 
     const g = piece.classification?.genre;
-    const match = props.genres.find((x) => x.id === g?.id) || (g?.id && g?.name ? { id: g.id, name: g.name } : null);
+    const match =
+      props.genres.find((x) => x.id === g?.id) ||
+      (g?.id && g?.name ? { id: g.id, name: g.name } : null);
+
     form.genre = match || props.genres?.[0] || { id: "genre_general", name: "General" };
 
-    form.tags = Array.isArray(piece.classification?.tags) ? [...piece.classification.tags] : [];
+    const incoming = Array.isArray(piece.classification?.tags) ? piece.classification.tags : [];
+    const cleaned = uniqueTags(incoming);
+    form.tags = cleaned;
+    tagsStore.addTags(cleaned);
   },
   { immediate: true }
 );
@@ -123,14 +163,6 @@ watch(
   { deep: true }
 );
 
-const errors = reactive({
-  title: [],
-  body: [],
-  language: [],
-  genre: [],
-  tags: [],
-});
-
 function clearErrors() {
   errors.title = [];
   errors.body = [];
@@ -142,22 +174,31 @@ function clearErrors() {
 function validate() {
   clearErrors();
 
-  if (!form.title || form.title.trim().length < 3 || form.title.trim().length > 150) {
+  const title = (form.title || "").trim();
+  if (title.length < 3 || title.length > 150) {
     errors.title = ["Title must be between 3 and 150 characters"];
   }
-  if (!form.body || !form.body.trim()) {
+
+  const body = (form.body || "").trim();
+  if (!body) {
     errors.body = ["Content body is required"];
   }
-  if (!form.language || !form.language.trim()) {
+
+  const lang = (form.language || "").trim();
+  if (!lang) {
     errors.language = ["Language is required"];
   }
+
   if (!form.genre?.id || !form.genre?.name) {
     errors.genre = ["Genre is required"];
   }
 
-  if (!Array.isArray(form.tags) || form.tags.length < 1) {
+  const cleanedTags = uniqueTags(form.tags);
+  form.tags = cleanedTags;
+
+  if (cleanedTags.length < 1) {
     errors.tags = ["At least one tag is required"];
-  } else if (form.tags.length > 5) {
+  } else if (cleanedTags.length > 5) {
     errors.tags = ["Maximum 5 tags allowed"];
   }
 
@@ -171,19 +212,19 @@ function validate() {
 }
 
 const payload = computed(() => {
-  const body = form.body.trim();
+  const body = (form.body || "").trim();
   const words = body ? body.split(/\s+/).filter(Boolean).length : 0;
 
   return {
-    title: form.title.trim(),
+    title: (form.title || "").trim(),
     content: {
       body,
-      language: form.language.trim(),
+      language: (form.language || "").trim(),
       excerpt: body.slice(0, 200),
       readingTimeMin: Math.max(1, Math.round(words / 200)),
     },
     classification: {
-      tags: form.tags.map((t) => String(t).trim()).filter(Boolean),
+      tags: uniqueTags(form.tags),
       genre: {
         id: form.genre.id,
         name: form.genre.name,

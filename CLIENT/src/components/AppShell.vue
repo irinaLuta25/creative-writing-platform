@@ -4,6 +4,7 @@
       elevation="2"
       height="64"
       class="app-bar"
+      color="transparent"
     >
       <v-container class="d-flex align-center">
         <div class="brand" @click="$router.push('/pieces')">
@@ -27,15 +28,6 @@
           >
             {{ auth.email }}
           </v-chip>
-
-          <v-btn
-            v-if="auth.isAdmin"
-            variant="outlined"
-            class="nav-btn"
-            to="/challenges"
-          >
-            Admin
-          </v-btn>
 
           <v-btn variant="text" class="nav-btn" @click="onLogout">
             Logout
@@ -84,14 +76,14 @@ function onLogout() {
     90deg,
     #5e35b1,
     #7e57c2
-  );
+  ) !important;
   color: white;
 }
 
 .brand {
   font-weight: 700;
   font-size: 1.2rem;
-  margin-right: 24px;
+  margin-right: 56px;
   cursor: pointer;
   letter-spacing: 0.4px;
 }

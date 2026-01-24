@@ -3,8 +3,6 @@
     <v-card class="shell" elevation="2">
       <v-card-title class="d-flex align-center">
         Pieces
-        <v-spacer />
-        <v-btn variant="outlined" @click="load">Reload</v-btn>
       </v-card-title>
 
       <v-card-text>
@@ -147,9 +145,13 @@ import { ref, onMounted, computed } from "vue";
 import { useRouter } from "vue-router";
 import http from "../api/http";
 import { useAuthStore } from "../stores/auth";
+import { useTagsStore } from "../stores/tags";
 
 const router = useRouter();
 const auth = useAuthStore();
+
+const tagsStore = useTagsStore();
+tagsStore.hydrate();
 
 const pieces = ref([]);
 const loading = ref(false);
@@ -197,12 +199,21 @@ function formatDate(value) {
   });
 }
 
+function formatTimestamp(value) {
+  if (!value) return 0;
+  if (value?.toDate) return value.toDate().getTime();
+  if (value?._seconds || value?.seconds) return (value._seconds || value.seconds) * 1000;
+  const ms = new Date(value).getTime();
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
 async function load() {
   loading.value = true;
   error.value = "";
   try {
     const res = await http.get("/piece");
     pieces.value = Array.isArray(res.data) ? res.data : [];
+    tagsStore.mergeFromPieces(pieces.value);
   } catch (e) {
     error.value = e?.normalizedMessage || "Failed to load pieces";
   } finally {
@@ -219,15 +230,7 @@ const genreOptions = computed(() => {
   return Array.from(set).sort();
 });
 
-const tagOptions = computed(() => {
-  const set = new Set();
-  for (const p of pieces.value) {
-    for (const t of p.classification?.tags || []) {
-      set.add(t);
-    }
-  }
-  return Array.from(set).sort();
-});
+const tagOptions = computed(() => tagsStore.tags);
 
 const filteredPieces = computed(() => {
   let list = [...pieces.value];
@@ -261,13 +264,6 @@ const filteredPieces = computed(() => {
 
   return list;
 });
-
-function formatTimestamp(value) {
-  if (!value) return 0;
-  if (value?.toDate) return value.toDate().getTime();
-  if (value?._seconds || value?.seconds) return (value._seconds || value.seconds) * 1000;
-  return new Date(value).getTime() || 0;
-}
 
 onMounted(load);
 </script>

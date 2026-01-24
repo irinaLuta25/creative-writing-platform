@@ -58,7 +58,7 @@ const register = async (req, res) => {
   }
 
   try {
-    const { email, password } = req.body;
+    const { email, password,displayName } = req.body;
 
     const exists = await checkEmailExists(email);
     if (exists) {
@@ -73,7 +73,7 @@ const register = async (req, res) => {
         passwordHash
       },
       profile: {
-        displayName: email.split('@')[0],
+        displayName: displayName.trim(),
         username: email.split('@')[0],
         bio: ''
       },

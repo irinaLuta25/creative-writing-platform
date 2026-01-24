@@ -49,7 +49,7 @@
 
                 <v-form v-if="auth.isLoggedIn" @submit.prevent="addComment">
                     <v-textarea v-model="newComment" label="Write a comment" rows="3" auto-grow />
-                    <v-btn color="primary" :loading="addingComment" type="submit">
+                    <v-btn color="deep-purple-accent-4" :loading="addingComment" type="submit">
                         Add comment
                     </v-btn>
                 </v-form>
