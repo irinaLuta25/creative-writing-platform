@@ -1,11 +1,36 @@
 <template>
   <v-form @submit.prevent="onSubmit">
+    <v-alert v-if="challenge" type="info" class="mb-4" variant="tonal">
+      <div class="d-flex align-center justify-space-between flex-wrap">
+        <div>
+          <div class="text-subtitle-2">Submitting for challenge</div>
+          <div class="text-body-2">
+            {{ challenge.title }}
+          </div>
+        </div>
+
+        <div class="text-caption">
+          <span v-if="challenge.availability?.schedule?.startsAt">
+            Starts: {{ formatDateEn(challenge.availability.schedule.startsAt) }}
+          </span>
+          <span v-if="challenge.availability?.schedule?.endsAt">
+            &nbsp;•&nbsp;Ends: {{ formatDateEn(challenge.availability.schedule.endsAt) }}
+          </span>
+        </div>
+      </div>
+    </v-alert>
+
+    <v-alert v-if="challengeEnded" type="error" class="mb-4" variant="tonal">
+      This challenge has ended. You can no longer submit.
+    </v-alert>
+
     <v-text-field
       v-model="form.title"
       label="Title"
       :error-messages="errors.title"
       counter="150"
       required
+      :disabled="loading || challengeEnded"
     />
 
     <v-textarea
@@ -15,13 +40,15 @@
       rows="10"
       auto-grow
       required
+      :disabled="loading || challengeEnded"
     />
 
     <v-text-field
       v-model="form.language"
-      label="Language (e.g. en / ro)"
+      label="Language (e.g. en)"
       :error-messages="errors.language"
       required
+      :disabled="loading || challengeEnded"
     />
 
     <v-select
@@ -33,21 +60,20 @@
       label="Genre"
       :error-messages="errors.genre"
       required
+      :disabled="loading || challengeEnded"
     />
 
     <v-combobox
       v-model="form.tags"
-      :items="tagOptions"
       label="Tags (1–5)"
       multiple
       chips
       clearable
-      closable-chips
       :error-messages="errors.tags"
-      hint="Pick existing tags or type new ones. Press Enter to add."
       persistent-hint
-      @update:modelValue="onTagsChanged"
-      required
+      hint="Choose from list or type your own, then press Enter"
+      :items="tagOptions"
+      :disabled="loading || challengeEnded"
     />
 
     <v-alert v-if="serverError" type="error" class="mt-4">
@@ -55,10 +81,20 @@
     </v-alert>
 
     <div class="d-flex gap-2 mt-5">
-      <v-btn color="deep-purple-accent-4" type="submit" :loading="loading">
+      <v-btn
+        color="deep-purple-accent-4"
+        type="submit"
+        :loading="loading"
+        :disabled="challengeEnded"
+      >
         {{ submitText }}
       </v-btn>
-      <v-btn variant="outlined" :disabled="loading" @click="$emit('cancel')">
+
+      <v-btn
+        variant="outlined"
+        :disabled="loading"
+        @click="$emit('cancel')"
+      >
         Cancel
       </v-btn>
     </div>
@@ -67,6 +103,7 @@
 
 <script setup>
 import { computed, reactive, watch } from "vue";
+import { formatDateEn, isPast } from "../utils/date";
 import { useTagsStore } from "../stores/tags";
 
 const props = defineProps({
@@ -74,17 +111,10 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   serverError: { type: String, default: "" },
   submitText: { type: String, default: "Save" },
-  genres: {
-    type: Array,
-    default: () => ([
-      { id: "genre_general", name: "General" },
-      { id: "genre_fantasy", name: "Fantasy" },
-      { id: "genre_scifi", name: "Sci-Fi" },
-      { id: "genre_romance", name: "Romance" },
-      { id: "genre_horror", name: "Horror" },
-      { id: "genre_poetry", name: "Poetry" }
-    ]),
-  },
+
+  genres: { type: Array, default: () => [] },
+
+  challenge: { type: Object, default: null },
 });
 
 const emit = defineEmits(["submit", "cancel"]);
@@ -94,59 +124,39 @@ tagsStore.hydrate();
 
 const tagOptions = computed(() => tagsStore.tags);
 
+const challengeEnded = computed(() => {
+  const endsAt = props.challenge?.availability?.schedule?.endsAt;
+  if (!endsAt) return false;
+  return isPast(endsAt);
+});
+
 const form = reactive({
   title: "",
   body: "",
-  language: "ro",
+  language: "en",
   genre: props.genres?.[0] || { id: "genre_general", name: "General" },
   tags: [],
 });
-
-const errors = reactive({
-  title: [],
-  body: [],
-  language: [],
-  genre: [],
-  tags: [],
-});
-
-function normalizeTag(t) {
-  return String(t || "")
-    .trim()
-    .replace(/^#+/, "")
-    .toLowerCase();
-}
-
-function uniqueTags(arr) {
-  return Array.from(new Set((arr || []).map(normalizeTag).filter(Boolean)));
-}
-
-function onTagsChanged(val) {
-  const cleaned = uniqueTags(val);
-  form.tags = cleaned;
-  tagsStore.addTags(cleaned);
-}
 
 watch(
   () => props.modelValue,
   (piece) => {
     if (!piece) return;
-
     form.title = piece.title || "";
     form.body = piece.content?.body || "";
-    form.language = piece.content?.language || "ro";
+    form.language = piece.content?.language || "en";
 
     const g = piece.classification?.genre;
     const match =
       props.genres.find((x) => x.id === g?.id) ||
       (g?.id && g?.name ? { id: g.id, name: g.name } : null);
 
-    form.genre = match || props.genres?.[0] || { id: "genre_general", name: "General" };
+    form.genre =
+      match || props.genres?.[0] || { id: "genre_general", name: "General" };
 
-    const incoming = Array.isArray(piece.classification?.tags) ? piece.classification.tags : [];
-    const cleaned = uniqueTags(incoming);
-    form.tags = cleaned;
-    tagsStore.addTags(cleaned);
+    form.tags = Array.isArray(piece.classification?.tags)
+      ? [...piece.classification.tags]
+      : [];
   },
   { immediate: true }
 );
@@ -163,6 +173,14 @@ watch(
   { deep: true }
 );
 
+const errors = reactive({
+  title: [],
+  body: [],
+  language: [],
+  genre: [],
+  tags: [],
+});
+
 function clearErrors() {
   errors.title = [];
   errors.body = [];
@@ -174,33 +192,26 @@ function clearErrors() {
 function validate() {
   clearErrors();
 
-  const title = (form.title || "").trim();
-  if (title.length < 3 || title.length > 150) {
+  const t = form.title.trim();
+  if (!t || t.length < 3 || t.length > 150) {
     errors.title = ["Title must be between 3 and 150 characters"];
   }
 
-  const body = (form.body || "").trim();
-  if (!body) {
-    errors.body = ["Content body is required"];
-  }
+  const b = form.body.trim();
+  if (!b) errors.body = ["Content body is required"];
 
-  const lang = (form.language || "").trim();
-  if (!lang) {
-    errors.language = ["Language is required"];
-  }
+  const lang = form.language.trim();
+  if (!lang) errors.language = ["Language is required"];
 
   if (!form.genre?.id || !form.genre?.name) {
     errors.genre = ["Genre is required"];
   }
 
-  const cleanedTags = uniqueTags(form.tags);
-  form.tags = cleanedTags;
+  const tags = Array.isArray(form.tags) ? form.tags : [];
+  const cleaned = tags.map((x) => String(x).trim()).filter(Boolean);
 
-  if (cleanedTags.length < 1) {
-    errors.tags = ["At least one tag is required"];
-  } else if (cleanedTags.length > 5) {
-    errors.tags = ["Maximum 5 tags allowed"];
-  }
+  if (cleaned.length < 1) errors.tags = ["At least one tag is required"];
+  else if (cleaned.length > 5) errors.tags = ["Maximum 5 tags allowed"];
 
   return (
     errors.title.length === 0 &&
@@ -212,19 +223,19 @@ function validate() {
 }
 
 const payload = computed(() => {
-  const body = (form.body || "").trim();
+  const body = form.body.trim();
   const words = body ? body.split(/\s+/).filter(Boolean).length : 0;
 
   return {
-    title: (form.title || "").trim(),
+    title: form.title.trim(),
     content: {
       body,
-      language: (form.language || "").trim(),
+      language: form.language.trim(),
       excerpt: body.slice(0, 200),
       readingTimeMin: Math.max(1, Math.round(words / 200)),
     },
     classification: {
-      tags: uniqueTags(form.tags),
+      tags: (form.tags || []).map((t) => String(t).trim()).filter(Boolean),
       genre: {
         id: form.genre.id,
         name: form.genre.name,
@@ -234,11 +245,18 @@ const payload = computed(() => {
 });
 
 function onSubmit() {
+  if (challengeEnded.value) return;
   if (!validate()) return;
+
+  const usedTags = payload.value.classification.tags;
+  tagsStore.addTags(usedTags);
+
   emit("submit", payload.value);
 }
 </script>
 
 <style scoped>
-.gap-2 { gap: 8px; }
+.gap-2 {
+  gap: 8px;
+}
 </style>

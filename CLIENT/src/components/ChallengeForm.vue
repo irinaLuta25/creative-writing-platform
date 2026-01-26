@@ -35,6 +35,24 @@
       />
     </div>
 
+    <div class="grid">
+      <v-text-field
+        v-model="form.startsAt"
+        type="date"
+        label="Start date"
+        :error-messages="errors.startsAt"
+        required
+      />
+
+      <v-text-field
+        v-model="form.endsAt"
+        type="date"
+        label="End date"
+        :error-messages="errors.endsAt"
+        required
+      />
+    </div>
+
     <v-combobox
       v-model="form.tags"
       label="Tags"
@@ -63,6 +81,7 @@
 
 <script setup>
 import { reactive, watch } from "vue";
+import { toMillis } from "../utils/date";
 
 const props = defineProps({
   modelValue: { type: Object, default: null },
@@ -75,11 +94,23 @@ const emit = defineEmits(["submit", "cancel"]);
 
 const languageOptions = ["en", "ro"];
 
+function yyyyMmDdFromAny(value) {
+  const ms = toMillis(value);
+  if (!ms) return "";
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 const form = reactive({
   title: "",
   promptText: "",
   maxWords: 300,
   language: "en",
+  startsAt: "",
+  endsAt: "",
   tags: []
 });
 
@@ -88,6 +119,8 @@ const errors = reactive({
   promptText: [],
   maxWords: [],
   language: [],
+  startsAt: [],
+  endsAt: [],
   tags: []
 });
 
@@ -95,11 +128,15 @@ watch(
   () => props.modelValue,
   (c) => {
     if (!c) return;
+
     form.title = c.title || "";
     form.promptText = c.prompt?.text || "";
     form.maxWords = c.prompt?.constraints?.maxWords ?? 300;
     form.language = c.prompt?.constraints?.language || "en";
     form.tags = Array.isArray(c.prompt?.tags) ? [...c.prompt.tags] : [];
+
+    form.startsAt = yyyyMmDdFromAny(c.availability?.schedule?.startsAt);
+    form.endsAt = yyyyMmDdFromAny(c.availability?.schedule?.endsAt);
   },
   { immediate: true }
 );
@@ -109,6 +146,8 @@ function clearErrors() {
   errors.promptText = [];
   errors.maxWords = [];
   errors.language = [];
+  errors.startsAt = [];
+  errors.endsAt = [];
   errors.tags = [];
 }
 
@@ -117,7 +156,9 @@ function validate() {
 
   const title = form.title.trim();
   if (!title) errors.title = ["Title is required"];
-  else if (title.length < 3 || title.length > 100) errors.title = ["Title must be between 3 and 100 characters"];
+  else if (title.length < 3 || title.length > 100) {
+    errors.title = ["Title must be between 3 and 100 characters"];
+  }
 
   const promptText = form.promptText.trim();
   if (!promptText) errors.promptText = ["Prompt text is required"];
@@ -129,6 +170,19 @@ function validate() {
   const lang = String(form.language || "").trim();
   if (!lang) errors.language = ["Language is required"];
 
+  if (!form.startsAt) errors.startsAt = ["Start date is required"];
+  if (!form.endsAt) errors.endsAt = ["End date is required"];
+
+  if (form.startsAt && form.endsAt) {
+    const start = new Date(form.startsAt);
+    const end = new Date(form.endsAt);
+    if (Number.isNaN(start.getTime())) errors.startsAt = ["Start date is invalid"];
+    if (Number.isNaN(end.getTime())) errors.endsAt = ["End date is invalid"];
+    if (!errors.startsAt.length && !errors.endsAt.length && end.getTime() < start.getTime()) {
+      errors.endsAt = ["End date must be after start date"];
+    }
+  }
+
   if (!Array.isArray(form.tags)) errors.tags = ["Tags must be an array"];
 
   return (
@@ -136,6 +190,8 @@ function validate() {
     errors.promptText.length === 0 &&
     errors.maxWords.length === 0 &&
     errors.language.length === 0 &&
+    errors.startsAt.length === 0 &&
+    errors.endsAt.length === 0 &&
     errors.tags.length === 0
   );
 }
@@ -152,6 +208,13 @@ function onSubmit() {
         language: String(form.language).trim()
       },
       tags: (form.tags || []).map((t) => String(t).trim()).filter(Boolean)
+    },
+    availability: {
+      isActive: true,
+      schedule: {
+        startsAt: new Date(form.startsAt).toISOString(),
+        endsAt: new Date(form.endsAt).toISOString()
+      }
     }
   };
 

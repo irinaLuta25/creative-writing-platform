@@ -5,6 +5,7 @@ const {
   getAllChallenges,
   getChallengeById,
   createChallenge,
+  getPiecesForChallenge,
   updateChallenge,
   deleteChallenge
 } = require("../controllers/challenge");
@@ -13,6 +14,7 @@ const { challengeValidator } = require("../validators/challengeValidator");
 const { validateToken } = require("../middlewares/auth");
 
 router.get("/", getAllChallenges);
+router.get("/:id/pieces", getPiecesForChallenge);
 router.get("/:id", getChallengeById);
 
 router.post("/", validateToken, challengeValidator, createChallenge);

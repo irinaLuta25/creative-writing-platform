@@ -5,38 +5,17 @@
         Challenges
       </v-card-title>
 
+
       <v-card-text>
         <div class="controls">
-          <v-text-field
-            v-model="search"
-            label="Search by title or prompt"
-            prepend-inner-icon="mdi-magnify"
-            clearable
-            hide-details
-          />
+          <v-text-field v-model="search" label="Search by title or prompt" prepend-inner-icon="mdi-magnify" clearable
+            hide-details />
 
-          <v-select
-            v-model="language"
-            :items="languageOptions"
-            label="Language"
-            clearable
-            hide-details
-          />
+          <v-select v-model="language" :items="languageOptions" label="Language" clearable hide-details />
 
-          <v-select
-            v-model="tag"
-            :items="tagOptions"
-            label="Tag"
-            clearable
-            hide-details
-          />
+          <v-select v-model="tag" :items="tagOptions" label="Tag" clearable hide-details />
 
-          <v-select
-            v-model="sort"
-            :items="sortOptions"
-            label="Sort"
-            hide-details
-          />
+          <v-select v-model="sort" :items="sortOptions" label="Sort" hide-details />
         </div>
 
         <v-alert v-if="error" type="error" class="mb-3">
@@ -51,12 +30,8 @@
               <v-card-title class="d-flex align-center">
                 <div class="title">{{ c.title }}</div>
                 <v-spacer />
-                <v-chip
-                  v-if="c.prompt?.constraints?.language"
-                  size="small"
-                  variant="outlined"
-                  color="deep-purple-lighten-2"
-                >
+                <v-chip v-if="c.prompt?.constraints?.language" size="small" variant="outlined"
+                  color="deep-purple-lighten-2">
                   {{ c.prompt.constraints.language }}
                 </v-chip>
               </v-card-title>
@@ -73,14 +48,8 @@
                 </div>
 
                 <div class="tags" v-if="(c.prompt?.tags || []).length">
-                  <v-chip
-                    v-for="t in c.prompt.tags"
-                    :key="t"
-                    size="x-small"
-                    variant="outlined"
-                    color="deep-purple-accent-2"
-                    class="mr-1 mb-1"
-                  >
+                  <v-chip v-for="t in c.prompt.tags" :key="t" size="x-small" variant="outlined"
+                    color="deep-purple-accent-2" class="mr-1 mb-1">
                     #{{ t }}
                   </v-chip>
                 </div>
@@ -104,15 +73,10 @@
       </v-card-text>
     </v-card>
 
-    <v-btn
-      v-if="auth.isAdmin"
-      class="fab"
-      color="deep-purple-accent-4"
-      icon="mdi-plus"
-      size="large"
-      elevation="10"
-      @click="goNew"
-    />
+    <v-btn v-if="auth.isAdmin" class="fab" color="deep-purple-accent-4" size="large" icon elevation="10"
+      aria-label="Create challenge" @click="goNew">
+      <v-icon icon="mdi-plus" />
+    </v-btn>
   </div>
 </template>
 
@@ -135,11 +99,11 @@ const language = ref(null);
 const tag = ref(null);
 const sort = ref("newest");
 
-const sortOptions  = [
+const sortOptions = [
   { title: "Newest first", value: "newest" },
   { title: "Oldest first", value: "oldest" }
 ];
-const languageOptions  = ["en", "ro"];
+const languageOptions = ["en", "ro"];
 
 function openChallenge(id) {
   router.push(`/challenges/${id}`);
@@ -267,5 +231,6 @@ onMounted(load);
   right: 20px;
   bottom: 20px;
   border-radius: 999px;
+  z-index: 3000;
 }
 </style>

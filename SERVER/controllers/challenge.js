@@ -1,6 +1,8 @@
 const { validationResult } = require("express-validator");
 const challengeModel = require("../models/challenge");
+const pieceModel = require("../models/piece")
 const admin = require("firebase-admin");
+const { he } = require("@faker-js/faker");
 const { FieldValue, Timestamp } = admin.firestore;
 
 const slugify = (text) =>
@@ -26,6 +28,23 @@ const getChallengeById = async (req, res) => {
     res.status(200).json(challenge);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch challenge" });
+  }
+};
+
+const getPiecesForChallenge = async (req, res) => {
+  try {
+    const challengeId = req.params.id;
+    
+    const challenge = await challengeModel.findById(challengeId);
+    if (!challenge) {
+      return res.status(404).json({ error: "Challenge not found" });
+    }
+    
+    const pieces = await pieceModel.findAllByChallengeId(challengeId);
+    console.log("got here");
+    res.status(200).json(pieces);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch challenge pieces" });
   }
 };
 
@@ -120,6 +139,7 @@ const deleteChallenge = async (req, res) => {
 module.exports = {
   getAllChallenges,
   getChallengeById,
+  getPiecesForChallenge,
   createChallenge,
   updateChallenge,
   deleteChallenge

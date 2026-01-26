@@ -30,6 +30,11 @@
                         {{ piece.classification.genre.name }}
                     </v-chip>
 
+                    <v-chip v-if="piece.challenge?.id" class="mr-2" size="small" variant="outlined"
+                        color="deep-purple-accent-2">
+                        Submitted for: {{ piece.challenge?.title || "Challenge" }}
+                    </v-chip>
+
                     <v-chip v-for="t in (piece.classification?.tags || [])" :key="t" class="mr-2" size="small"
                         variant="outlined">
                         #{{ t }}

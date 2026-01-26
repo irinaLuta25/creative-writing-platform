@@ -22,6 +22,23 @@ const findBySlug = async (slug) => {
   return { id: doc.id, ...doc.data() };
 };
 
+const findAllByChallengeId = async (challengeId, limit = 100) => {
+  const snapshot = await piecesCollection
+    .where("challenge.id", "==", challengeId)
+    .limit(limit)
+    .get();
+
+  const list = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+  list.sort((a, b) => {
+    const sa = a?.metadata?.createdAt?._seconds ?? a?.metadata?.createdAt?.seconds ?? 0;
+    const sb = b?.metadata?.createdAt?._seconds ?? b?.metadata?.createdAt?.seconds ?? 0;
+    return sb - sa;
+  });
+
+  return list;
+};
+
 const create = async (pieceData) => {
   const docRef = piecesCollection.doc();
   const pieceId = docRef.id;
@@ -76,6 +93,7 @@ module.exports = {
   findAll,
   findById,
   findBySlug,
+  findAllByChallengeId,
   create,
   update,
   remove,

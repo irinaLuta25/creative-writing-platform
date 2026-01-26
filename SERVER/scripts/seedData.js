@@ -1,12 +1,19 @@
 const admin = require("firebase-admin");
-const {db} = require("../config/db");
+const { db } = require("../config/db");
 const { FieldValue, Timestamp } = admin.firestore;
+const { hashPassword } = require("../auth");
 
-async function clearCollection(name) {
-  const snapshot = await db.collection(name).get();
-  const batch = db.batch();
-  snapshot.docs.forEach(doc => batch.delete(doc.ref));
-  await batch.commit();
+async function clearCollection(name, batchSize = 400) {
+  const colRef = db.collection(name);
+
+  while (true) {
+    const snap = await colRef.limit(batchSize).get();
+    if (snap.empty) break;
+
+    const batch = db.batch();
+    for (const doc of snap.docs) batch.delete(doc.ref);
+    await batch.commit();
+  }
 }
 
 function pick(arr) {
@@ -15,17 +22,19 @@ function pick(arr) {
 
 function pickMany(arr, min = 2, max = 4) {
   const shuffled = [...arr].sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, Math.floor(Math.random() * (max - min + 1)) + min);
+  const n = Math.floor(Math.random() * (max - min + 1)) + min;
+  return shuffled.slice(0, n);
 }
 
 function slugify(text) {
-  return text
+  return String(text || "")
     .toLowerCase()
     .replace(/[ăâ]/g, "a")
     .replace(/[î]/g, "i")
     .replace(/[ș]/g, "s")
     .replace(/[ț]/g, "t")
     .replace(/[^\w\s-]/g, "")
+    .trim()
     .replace(/\s+/g, "-")
     .slice(0, 80);
 }
@@ -33,32 +42,32 @@ function slugify(text) {
 async function main() {
   const { faker } = await import("@faker-js/faker");
 
-  console.log("Stergere date vechi...");
+  const DEFAULT_PASSWORD = "password";
+  const DEFAULT_PASSWORD_HASH = await hashPassword(DEFAULT_PASSWORD);
+
+  console.log("Clearing old data...");
   await clearCollection("users");
   await clearCollection("challenges");
   await clearCollection("pieces");
 
   console.log("Seeding...");
 
-  // ---------------- USERS ----------------
   const users = [];
   for (let i = 0; i < 8; i++) {
     const displayName = faker.person.fullName();
-    const username = faker.internet.username().toLowerCase();
+    const email = faker.internet.email().toLowerCase();
+    const username =
+      faker.internet.username().toLowerCase().replace(/[^a-z0-9_]/g, "_") ||
+      email.split("@")[0];
 
     const ref = db.collection("users").doc();
+
     await ref.set({
       userId: ref.id,
-      auth: { email: faker.internet.email() },
-      profile: {
-        displayName,
-        username,
-        bio: faker.lorem.sentence(),
-      },
+      auth: { email, passwordHash: DEFAULT_PASSWORD_HASH },
+      profile: { displayName, username, bio: faker.lorem.sentence() },
       roles: ["user"],
-      preferences: {
-        languages: ["ro"],
-      },
+      preferences: { languages: ["en"] },
       stats: { piecesCount: 0, commentsCount: 0 },
       metadata: {
         createdAt: FieldValue.serverTimestamp(),
@@ -66,84 +75,96 @@ async function main() {
       },
     });
 
-    users.push({ id: ref.id, displayName, username });
+    users.push({ id: ref.id, displayName, username, email });
   }
 
-  // ---------------- CHALLENGES ----------------
   const challenges = [];
   for (let i = 0; i < 4; i++) {
     const title = faker.lorem.words(3);
     const ref = db.collection("challenges").doc();
 
-    await ref.set({
+    const startsAt = Timestamp.fromDate(faker.date.recent({ days: 7 }));
+    const endsAt = Timestamp.fromDate(faker.date.soon({ days: 30 }));
+
+    const createdBy = pick(users).id;
+
+    const challengeDoc = {
       challengeId: ref.id,
       title,
-      slug: slugify(title),
+      slug: slugify(title) + "-" + Math.random().toString(36).slice(2, 6),
       prompt: {
         text: faker.lorem.paragraph(),
         constraints: {
           maxWords: faker.number.int({ min: 200, max: 800 }),
-          language: "ro",
+          language: "en",
         },
-        tags: pickMany(["emotie", "natura", "conflict", "memorie"]),
+        tags: pickMany(["emotion", "nature", "conflict", "memory"]),
       },
       availability: {
         isActive: true,
-        schedule: {
-          startsAt: Timestamp.fromDate(new Date()),
-          endsAt: Timestamp.fromDate(faker.date.soon({ days: 30 })),
-        },
+        schedule: { startsAt, endsAt },
       },
       stats: { submissionsCount: 0 },
       metadata: {
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-        createdBy: pick(users).id,
+        createdBy,
+      },
+    };
+
+    await ref.set(challengeDoc);
+
+    challenges.push({
+      id: ref.id,
+      title: challengeDoc.title,
+      constraintsSnapshot: {
+        maxWords: challengeDoc.prompt.constraints.maxWords,
+        language: challengeDoc.prompt.constraints.language,
+        tags: Array.isArray(challengeDoc.prompt.tags) ? challengeDoc.prompt.tags : [],
       },
     });
-
-    challenges.push(ref.id);
   }
 
-  // ---------------- PIECES + COMMENTS ----------------
   for (let i = 0; i < 12; i++) {
-    const title = faker.lorem.sentence(4).replace(".", "");
+    const title = faker.lorem.sentence(4).replace(/\.$/, "");
     const body = faker.lorem.paragraphs(4, "\n\n");
     const author = pick(users);
-    const challengeId = Math.random() > 0.5 ? pick(challenges) : null;
+
+    const maybeChallenge = Math.random() > 0.5 ? pick(challenges) : null;
 
     const pieceRef = db.collection("pieces").doc();
+
+    const wordsArr = body.split(/\s+/).filter(Boolean);
+    const wordsCount = wordsArr.length;
 
     await pieceRef.set({
       pieceId: pieceRef.id,
       title,
-      slug: slugify(title),
+      slug: slugify(title) + "-" + Math.random().toString(36).slice(2, 6),
       content: {
         body,
         excerpt: body.slice(0, 200),
-        language: "ro",
-        readingTimeMin: Math.ceil(body.split(" ").length / 200),
+        language: "en",
+        readingTimeMin: Math.max(1, Math.round(wordsCount / 200)),
       },
       classification: {
-        genre: { id: "gen_prose", name: "Prose" },
-        tags: pickMany(["ploaie", "oras", "singuratate", "vis"]),
+        genre: { id: "genre_romance", name: "Romance" },
+        tags: pickMany(["rain", "city", "loneliness", "dream"]),
       },
       author: {
         id: author.id,
         displayName: author.displayName,
         username: author.username,
+        email: author.email,
       },
-      challenge: challengeId
+      challenge: maybeChallenge
         ? {
-            id: challengeId,
-            title: "Challenge activ",
-            constraintsSnapshot: { maxWords: 500, language: "ro" },
+            id: maybeChallenge.id,
+            title: maybeChallenge.title,
+            constraintsSnapshot: maybeChallenge.constraintsSnapshot,
           }
         : null,
-      stats: {
-        words: body.split(" ").length,
-        commentsCount: 0,
-      },
+      stats: { words: wordsCount, commentsCount: 0 },
       commentsPreview: [],
       metadata: {
         createdAt: FieldValue.serverTimestamp(),
@@ -152,7 +173,6 @@ async function main() {
       },
     });
 
-    // ---- COMMENTS subcollection ----
     const commentsCount = faker.number.int({ min: 1, max: 4 });
     for (let c = 0; c < commentsCount; c++) {
       const commenter = pick(users);
@@ -164,11 +184,9 @@ async function main() {
           id: commenter.id,
           displayName: commenter.displayName,
           username: commenter.username,
+          email: commenter.email,
         },
-        content: {
-          text: faker.lorem.sentence(),
-          mentions: [],
-        },
+        content: { text: faker.lorem.sentence(), mentions: [] },
         moderation: { status: "visible" },
         metadata: {
           createdAt: FieldValue.serverTimestamp(),
@@ -179,11 +197,12 @@ async function main() {
     }
   }
 
-  console.log("Seed complet.");
+  console.log("Seed complete.");
+  console.log("Seed users password:", DEFAULT_PASSWORD);
   process.exit(0);
 }
 
-main().catch(err => {
-  console.error("Eroare seed:", err);
+main().catch((err) => {
+  console.error("Seed error:", err);
   process.exit(1);
 });

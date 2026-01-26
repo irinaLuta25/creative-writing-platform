@@ -49,6 +49,11 @@
                             </v-card-subtitle>
 
                             <v-card-text>
+                                <div v-if="p.challenge?.id" class="submitted">
+                                    Submitted for challenge: <span class="submitted-title">{{ p.challenge?.title ||
+                                        "Challenge" }}</span>
+                                </div>
+
                                 <div class="excerpt">
                                     {{ p.content?.excerpt || "" }}
                                 </div>
@@ -300,5 +305,16 @@ onMounted(load);
 .genre-chip {
     align-self: start;
     white-space: nowrap;
+}
+
+.submitted {
+  font-size: 0.85rem;
+  opacity: 0.85;
+  margin-bottom: 10px;
+  color: #5e35b1;
+}
+
+.submitted-title {
+  font-weight: 600;
 }
 </style>

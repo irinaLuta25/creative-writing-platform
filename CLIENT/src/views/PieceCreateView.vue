@@ -6,6 +6,7 @@
         :genres="genres"
         :loading="loading"
         :serverError="serverError"
+        :challenge="challenge"
         submitText="Create"
         @submit="create"
         @cancel="goBack"
@@ -15,14 +16,20 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
-import { useRouter } from "vue-router";
+import { ref, onMounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import http from "../api/http";
 import PieceForm from "../components/PieceForm.vue";
+import { apiGetChallengeById } from "../api/challenges";
 
 const router = useRouter();
+const route = useRoute();
+
 const loading = ref(false);
 const serverError = ref("");
+
+const challenge = ref(null);
+const challengeId = ref(null);
 
 const genres = [
   { id: "genre_general", name: "General" },
@@ -32,18 +39,39 @@ const genres = [
   { id: "genre_horror", name: "Horror" },
   { id: "genre_poetry", name: "Poetry" },
   { id: "genre_drama", name: "Drama" },
-  { id: "genre_mystery", name: "Mystery" }
+  { id: "genre_mystery", name: "Mystery" },
 ];
 
 function goBack() {
   router.push("/pieces");
 }
 
+async function loadChallengeIfAny() {
+  const q = route.query?.challengeId;
+  if (!q) return;
+
+  challengeId.value = String(q);
+  try {
+    const res = await apiGetChallengeById(challengeId.value);
+    challenge.value = res.data;
+  } catch (e) {
+    serverError.value = e?.normalizedMessage || "Failed to load challenge";
+    challenge.value = null;
+    challengeId.value = null;
+  }
+}
+
 async function create(payload) {
   loading.value = true;
   serverError.value = "";
+
   try {
-    const res = await http.post("/piece", payload);
+    const finalPayload = {
+      ...payload,
+      ...(challengeId.value ? { challengeId: challengeId.value } : {}),
+    };
+
+    const res = await http.post("/piece", finalPayload);
     const id = res.data?.id || res.data?.pieceId;
     router.push(id ? `/pieces/${id}` : "/pieces");
   } catch (e) {
@@ -52,4 +80,6 @@ async function create(payload) {
     loading.value = false;
   }
 }
+
+onMounted(loadChallengeIfAny);
 </script>

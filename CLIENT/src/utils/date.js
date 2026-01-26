@@ -16,3 +16,9 @@ export function formatDateEn(value) {
     day: "2-digit"
   });
 }
+
+export function isPast(value) {
+  const ms = toMillis(value);
+  if (!ms) return false;
+  return Date.now() > ms;
+}
